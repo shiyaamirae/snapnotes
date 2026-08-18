@@ -62,6 +62,7 @@ Workflows should evolve as you learn, but they're Shiyaa's source of truth — p
 inbox/          # Screenshots waiting to be processed (Hammerspoon drops captures here).
                  # Disposable — never treat inbox/ as the source of truth.
 processed/      # Successfully filed screenshots, moved here as <category>/<file>.
+                 # Auto-deleted after 10 days (snapnotes/app.py) — Notion already has the content by then.
 needs_review/   # Screenshots where nothing matched a category — check explanation + suggestion in logs.
 errors/         # Screenshots that raised an exception mid-processing. Never silently dropped.
 logs/           # Rotating pipeline log (snapnotes.log).
