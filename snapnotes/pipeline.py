@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import sys
 import traceback
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Callable
@@ -21,6 +22,12 @@ class ProcessResult(str, Enum):
     ERROR = "error"
 
 
+@dataclass
+class ProcessOutcome:
+    result: ProcessResult
+    filed_category: str | None = None  # only set when result is FILED
+
+
 def _category_for(categories: list[CategoryConfig], category_name: str) -> CategoryConfig | None:
     for cat in categories:
         if cat.name == category_name:
@@ -30,7 +37,7 @@ def _category_for(categories: list[CategoryConfig], category_name: str) -> Categ
 
 def process_screenshot(
     path: Path, cfg: AppConfig, on_status: Callable[[str], None] = lambda s: None
-) -> ProcessResult:
+) -> ProcessOutcome:
     try:
         on_status("processing")
         categories = notion_client.fetch_categories(cfg.notion_token, cfg.notion_home_url)
@@ -54,7 +61,7 @@ def process_screenshot(
             shutil.move(str(path), str(dest_dir / path.name))
             logger.info("Filed %s under %s", path.name, result.matched_category)
             on_status("done")
-            return ProcessResult.FILED
+            return ProcessOutcome(ProcessResult.FILED, filed_category=result.matched_category)
 
         dest_dir = REPO_ROOT / "needs_review"
         shutil.move(str(path), str(dest_dir / path.name))
@@ -65,7 +72,7 @@ def process_screenshot(
             result.suggested_category,
         )
         on_status("needs_review")
-        return ProcessResult.NEEDS_REVIEW
+        return ProcessOutcome(ProcessResult.NEEDS_REVIEW)
 
     except Exception:
         logger.error("Failed to process %s:\n%s", path.name, traceback.format_exc())
@@ -75,7 +82,7 @@ def process_screenshot(
         except Exception:
             pass
         on_status("error")
-        return ProcessResult.ERROR
+        return ProcessOutcome(ProcessResult.ERROR)
 
 
 if __name__ == "__main__":
@@ -85,4 +92,5 @@ if __name__ == "__main__":
 
     cfg = load_config()
     outcome = process_screenshot(Path(sys.argv[1]), cfg, on_status=print)
-    print(f"Result: {outcome.value}")
+    suffix = f" ({outcome.filed_category})" if outcome.filed_category else ""
+    print(f"Result: {outcome.result.value}{suffix}")

@@ -91,7 +91,7 @@ class SnapNotesApp(rumps.App):
     def __init__(self):
         super().__init__("SnapNotes", title=ICONS["idle"])
         self.cfg = load_config()
-        self.status_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self.status_queue: queue.Queue[tuple[str, str, str | None]] = queue.Queue()
         self.recent: deque[str] = deque(maxlen=5)
         self.executor = ThreadPoolExecutor(max_workers=2)
         self._result_shown_at: float | None = None
@@ -114,22 +114,23 @@ class SnapNotesApp(rumps.App):
         self.cleanup_timer.start()
 
     def _handle_new_file(self, path: Path):
-        self.status_queue.put(("processing", path.name))
+        self.status_queue.put(("processing", path.name, None))
         self.executor.submit(self._process, path)
 
     def _process(self, path: Path):
-        result = process_screenshot(path, self.cfg)
-        self.status_queue.put((result.value, path.name))
+        outcome = process_screenshot(path, self.cfg)
+        self.status_queue.put((outcome.result.value, path.name, outcome.filed_category))
 
     def _drain_status_queue(self, _timer):
         try:
             while True:
-                status, filename = self.status_queue.get_nowait()
+                status, filename, filed_category = self.status_queue.get_nowait()
                 self.title = ICONS.get(status, ICONS["idle"])
                 if status == "filed":
                     self.recent.appendleft(f"{filename} -> filed")
                     self._rebuild_recent_menu()
-                    _notify("Filed", filename, open_url=self.cfg.notion_home_url)
+                    subtitle = f"Added to {filed_category} ✅" if filed_category else "Filed"
+                    _notify(subtitle, filename, open_url=self.cfg.notion_home_url)
                     self._result_shown_at = time.monotonic()
                 elif status == "needs_review":
                     self.recent.appendleft(f"{filename} -> needs review")
