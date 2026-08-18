@@ -5,6 +5,10 @@
 1. Install Hammerspoon: `brew install --cask hammerspoon`, launch it once,
    grant it **Accessibility** and **Screen Recording** permission in
    System Settings -> Privacy & Security.
+1b. Install `terminal-notifier`: `brew install terminal-notifier`. It'll
+   prompt for notification permission the first time it fires - allow it.
+   `rumps.notification` doesn't reliably fire on modern macOS for an
+   unbundled script, so `snapnotes/app.py` uses this instead.
 2. Hotkey is set to cmd+shift+7 in `hammerspoon/init.lua.snippet` (doesn't
    collide with system shortcuts like cmd+shift+3/4/5). Change it there if
    you want something else.
@@ -41,8 +45,7 @@
 6. `python -m snapnotes.watcher` — drop a file into `inbox/` manually,
    confirm it's picked up.
 7. `python -m snapnotes.app` — menu bar shell; confirm icon states and
-   notifications work (if `rumps.notification` doesn't fire on your macOS
-   version, fall back to `terminal-notifier`).
+   notifications work (uses `terminal-notifier`, see step 1b above).
 8. Wire up the Hammerspoon hotkey (merge `hammerspoon/init.lua.snippet`
    into `~/.hammerspoon/init.lua`, reload config).
 9. Fill in `scripts/launchd/com.shiyaa.snapnotes.plist` placeholders and

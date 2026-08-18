@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import queue
 import subprocess
+import traceback
 import webbrowser
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -10,16 +12,34 @@ from pathlib import Path
 import rumps
 
 from snapnotes.config import REPO_ROOT, load_config
-from snapnotes.pipeline import process_screenshot
+from snapnotes.pipeline import process_screenshot  # noqa: F401  (sets up the "snapnotes" logger)
 from snapnotes.watcher import start_watching
+
+logger = logging.getLogger("snapnotes")
 
 ICONS = {
     "idle": "●",
     "processing": "◐",
-    "done": "✓",
+    "filed": "✓",
     "needs_review": "?",
     "error": "!",
 }
+
+
+def _notify(subtitle: str, message: str) -> None:
+    """rumps.notification is unreliable on modern macOS for an unbundled
+    script - terminal-notifier is a signed helper that actually delivers."""
+    try:
+        result = subprocess.run(
+            ["terminal-notifier", "-title", "SnapNotes", "-subtitle", subtitle, "-message", message],
+            capture_output=True,
+            text=True,
+        )
+        logger.info(
+            "terminal-notifier rc=%s stdout=%r stderr=%r", result.returncode, result.stdout, result.stderr
+        )
+    except Exception:
+        logger.error("terminal-notifier call failed:\n%s", traceback.format_exc())
 
 
 class SnapNotesApp(rumps.App):
@@ -59,18 +79,24 @@ class SnapNotesApp(rumps.App):
                 if status == "filed":
                     self.recent.appendleft(f"{filename} -> filed")
                     self._rebuild_recent_menu()
-                    rumps.notification("SnapNotes", "Filed", filename)
+                    _notify("Filed", filename)
                 elif status == "needs_review":
                     self.recent.appendleft(f"{filename} -> needs review")
                     self._rebuild_recent_menu()
-                    rumps.notification("SnapNotes", "Needs review", filename)
+                    _notify("Needs review", filename)
                 elif status == "error":
-                    rumps.notification("SnapNotes", "Error processing", filename)
+                    _notify("Error processing", filename)
         except queue.Empty:
             pass
 
     def _rebuild_recent_menu(self):
-        self.recent_menu.clear()
+        # rumps.MenuItem's underlying NSMenu doesn't exist until something's
+        # been added to it once, so .clear() throws AttributeError on the
+        # very first rebuild (before anything's ever been added).
+        try:
+            self.recent_menu.clear()
+        except AttributeError:
+            pass
         for entry in self.recent:
             self.recent_menu.add(rumps.MenuItem(entry))
 
