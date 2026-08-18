@@ -363,6 +363,17 @@ def append_entry(
     return response.get("results", [{}])[0].get("id", "")
 
 
+def delete_entry(notion_token: str, notion_entry_id: str, is_database_entry: bool) -> None:
+    """Reverses append_entry - archives a database row via pages.update
+    (blocks.delete doesn't reliably apply to a page/row), or removes a
+    regular content block (toggle/heading/generic) via blocks.delete."""
+    client = Client(auth=notion_token)
+    if is_database_entry:
+        client.pages.update(page_id=notion_entry_id, archived=True)
+    else:
+        client.blocks.delete(block_id=notion_entry_id)
+
+
 def verify_page_access(notion_token: str, page_id: str) -> bool:
     client = Client(auth=notion_token)
     try:

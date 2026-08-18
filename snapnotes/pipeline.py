@@ -26,6 +26,9 @@ class ProcessResult(str, Enum):
 class ProcessOutcome:
     result: ProcessResult
     filed_category: str | None = None  # only set when result is FILED
+    notion_entry_id: str | None = None  # the block/row id created, for undo
+    is_database_entry: bool = False  # affects how undo deletes it
+    processed_path: Path | None = None  # where the screenshot ended up, for undo
 
 
 def _category_for(categories: list[CategoryConfig], category_name: str) -> CategoryConfig | None:
@@ -48,20 +51,29 @@ def process_screenshot(
         if category:
             if category.is_database:
                 field_values = gemini_client.extract_database_fields(path, cfg, category, result.title)
-                notion_client.append_entry(cfg.notion_token, category, result, field_values=field_values)
+                entry_id = notion_client.append_entry(
+                    cfg.notion_token, category, result, field_values=field_values
+                )
             elif category.format_instructions:
                 formatted_entry = gemini_client.extract_formatted_entry(path, cfg, category)
-                notion_client.append_entry(
+                entry_id = notion_client.append_entry(
                     cfg.notion_token, category, result, formatted_entry=formatted_entry, image_path=path
                 )
             else:
-                notion_client.append_entry(cfg.notion_token, category, result)
+                entry_id = notion_client.append_entry(cfg.notion_token, category, result)
             dest_dir = REPO_ROOT / "processed" / result.matched_category
             dest_dir.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(path), str(dest_dir / path.name))
+            final_path = dest_dir / path.name
+            shutil.move(str(path), str(final_path))
             logger.info("Filed %s under %s", path.name, result.matched_category)
             on_status("done")
-            return ProcessOutcome(ProcessResult.FILED, filed_category=result.matched_category)
+            return ProcessOutcome(
+                ProcessResult.FILED,
+                filed_category=result.matched_category,
+                notion_entry_id=entry_id,
+                is_database_entry=category.is_database,
+                processed_path=final_path,
+            )
 
         dest_dir = REPO_ROOT / "needs_review"
         shutil.move(str(path), str(dest_dir / path.name))

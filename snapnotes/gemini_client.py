@@ -5,6 +5,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
+from snapnotes import api_usage
 from snapnotes.models import (
     AppConfig,
     CategoryConfig,
@@ -49,6 +50,7 @@ def classify_and_extract(
         data=image_path.read_bytes(), mime_type="image/png"
     )
 
+    api_usage.record_call()
     response = client.models.generate_content(
         model=cfg.gemini_model,
         contents=[build_prompt(categories), image_part],
@@ -110,6 +112,7 @@ def extract_database_fields(
         data=image_path.read_bytes(), mime_type="image/png"
     )
 
+    api_usage.record_call()
     response = client.models.generate_content(
         model=cfg.gemini_model,
         contents=[build_database_prompt(category, overview_title), image_part],
@@ -149,6 +152,7 @@ def extract_formatted_entry(
         data=image_path.read_bytes(), mime_type="image/png"
     )
 
+    api_usage.record_call()
     response = client.models.generate_content(
         model=cfg.gemini_model,
         contents=[build_format_prompt(category), image_part],
