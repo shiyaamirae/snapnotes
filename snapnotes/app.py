@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import rumps
+from AppKit import NSApplication
 
 from snapnotes import api_usage, notion_client
 from snapnotes.config import REPO_ROOT, load_config
@@ -194,6 +195,11 @@ class SnapNotesApp(rumps.App):
     def _make_undo_callback(self, entry: RecentEntry):
         def _undo(_sender):
             outcome = entry.outcome
+            # A menu-bar-only ("accessory") app isn't the frontmost app by
+            # default, and NSAlert's modal loop can resolve itself near-
+            # instantly (as a false "cancel") if the app - and therefore the
+            # alert - never actually gets key focus. Force activation first.
+            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
             confirmed = rumps.alert(
                 title="Undo filing?",
                 message=f'Remove "{entry.filename}" from {outcome.filed_category} in Notion '
