@@ -42,6 +42,9 @@ def process_screenshot(
             if category.is_database:
                 field_values = gemini_client.extract_database_fields(path, cfg, category)
                 notion_client.append_entry(cfg.notion_token, category, result, field_values=field_values)
+            elif category.format_instructions:
+                formatted_entry = gemini_client.extract_formatted_entry(path, cfg, category)
+                notion_client.append_entry(cfg.notion_token, category, result, formatted_entry=formatted_entry)
             else:
                 notion_client.append_entry(cfg.notion_token, category, result)
             dest_dir = REPO_ROOT / "processed" / result.matched_category

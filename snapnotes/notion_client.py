@@ -10,7 +10,14 @@ from snapnotes.models import (
     DatabaseExtraction,
     DatabaseSchemaProperty,
     ExtractionResult,
+    FormattedEntry,
 )
+
+SAFE_CODE_LANGUAGES = {
+    "javascript", "typescript", "python", "json", "yaml", "markdown",
+    "bash", "shell", "html", "css", "sql", "java", "c", "c++", "c#",
+    "go", "rust", "ruby", "php", "plain text",
+}
 
 WRITABLE_PROPERTY_TYPES = {
     "title",
@@ -85,6 +92,75 @@ def build_bullets_children(title: str, bullets: list[str]) -> list[dict]:
     return [_title_block(title), *bullet_blocks, {"object": "block", "type": "divider", "divider": {}}]
 
 
+def _bullet_item_blocks(bullets: list[str]) -> list[dict]:
+    return [
+        {
+            "object": "block",
+            "type": "bulleted_list_item",
+            "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": b}}]},
+        }
+        for b in bullets
+    ]
+
+
+def _plain_table_block(headers: list[str], rows: list[list[str]]) -> dict:
+    def row_block(cells: list[str]) -> dict:
+        return {
+            "object": "block",
+            "type": "table_row",
+            "table_row": {
+                "cells": [[{"type": "text", "text": {"content": cell}}] for cell in cells]
+            },
+        }
+
+    return {
+        "object": "block",
+        "type": "table",
+        "table": {
+            "table_width": len(headers),
+            "has_column_header": True,
+            "has_row_header": False,
+            "children": [row_block(headers)] + [row_block(r) for r in rows],
+        },
+    }
+
+
+def _code_block(content: str, language: str | None) -> dict:
+    safe_language = language.strip().lower() if language else "plain text"
+    if safe_language not in SAFE_CODE_LANGUAGES:
+        safe_language = "plain text"
+    return {
+        "object": "block",
+        "type": "code",
+        "code": {
+            "rich_text": [{"type": "text", "text": {"content": content}}],
+            "language": safe_language,
+        },
+    }
+
+
+def build_toggle_children(entry: FormattedEntry, fallback_title: str) -> list[dict]:
+    """A toggle-wrapped entry, per a category's own "Format:" instruction
+    (e.g. Prompts wants toggle+code block, Portfolio Ideas wants toggle+bullets).
+    No heading/timestamp - the toggle title itself is the visible label."""
+    if entry.content_type == "code":
+        inner = [_code_block(entry.code_content or "", entry.code_language)]
+    elif entry.content_type == "table":
+        inner = [_plain_table_block(entry.table_headers or [], entry.table_rows or [])]
+    else:
+        inner = _bullet_item_blocks(entry.bullets or [])
+
+    toggle_block = {
+        "object": "block",
+        "type": "toggle",
+        "toggle": {
+            "rich_text": [{"type": "text", "text": {"content": entry.toggle_title or fallback_title}}],
+            "children": inner,
+        },
+    }
+    return [toggle_block, {"object": "block", "type": "divider", "divider": {}}]
+
+
 def _data_source_schema(client: Client, database_id: str) -> tuple[str, list[DatabaseSchemaProperty]]:
     """Notion's 2025-09-03 API splits a database from its data source: the
     writable property schema lives on the data source, and pages.create needs
@@ -152,17 +228,17 @@ def append_entry(
     category: CategoryConfig,
     result: ExtractionResult,
     field_values: DatabaseExtraction | None = None,
+    formatted_entry: FormattedEntry | None = None,
 ) -> str:
     client = Client(auth=notion_token)
 
-    if result.content_type == "table":
-        children = build_table_children(
-            result.title, result.table_headers or [], result.table_rows or []
-        )
-    else:
-        children = build_bullets_children(result.title, result.bullets or [])
-
     if category.is_database:
+        if result.content_type == "table":
+            children = build_table_children(
+                result.title, result.table_headers or [], result.table_rows or []
+            )
+        else:
+            children = build_bullets_children(result.title, result.bullets or [])
         properties = _build_database_properties(
             category.schema_properties or [], field_values, fallback_title=result.title
         )
@@ -172,6 +248,15 @@ def append_entry(
         row_id = row["id"]
         client.blocks.children.append(block_id=row_id, children=children)
         return row_id
+
+    if formatted_entry is not None:
+        children = build_toggle_children(formatted_entry, fallback_title=result.title)
+    elif result.content_type == "table":
+        children = build_table_children(
+            result.title, result.table_headers or [], result.table_rows or []
+        )
+    else:
+        children = build_bullets_children(result.title, result.bullets or [])
 
     response = client.blocks.children.append(block_id=category.notion_page_id, children=children)
     return response.get("results", [{}])[0].get("id", "")
@@ -186,23 +271,46 @@ def verify_page_access(notion_token: str, page_id: str) -> bool:
         return False
 
 
-def _first_paragraph_text(client: Client, page_id: str) -> str:
-    """Best-effort description: the plain text of a category subpage's first
-    paragraph or callout block (e.g. a "What this page is for:" note), if it
-    has one. Empty string if there isn't one."""
+def _block_text(block: dict) -> str:
+    block_type = block.get("type")
+    rich_text = block.get(block_type, {}).get("rich_text", [])
+    return "".join(t.get("plain_text", "") for t in rich_text).strip()
+
+
+def _description_and_format(client: Client, page_id: str) -> tuple[str, str | None]:
+    """Best-effort description + format instruction: the plain text of a
+    category subpage's first paragraph or callout block (e.g. a "What this
+    page is for:" note), plus a nested "Format:" child block under it, if
+    either exists. Format instructions are kept separate from the
+    description since they're only used once a category has already
+    matched, not during classification."""
     try:
         children = client.blocks.children.list(block_id=page_id, page_size=5)
     except Exception:
-        return ""
+        return "", None
 
     for block in children.get("results", []):
         block_type = block.get("type")
-        if block_type in ("paragraph", "callout"):
-            rich_text = block[block_type].get("rich_text", [])
-            text = "".join(t.get("plain_text", "") for t in rich_text).strip()
-            if text:
-                return text
-    return ""
+        if block_type not in ("paragraph", "callout"):
+            continue
+        description = _block_text(block)
+        if not description:
+            continue
+
+        format_instructions = None
+        if block.get("has_children"):
+            try:
+                sub_blocks = client.blocks.children.list(block_id=block["id"], page_size=5)
+                for sub_block in sub_blocks.get("results", []):
+                    text = _block_text(sub_block)
+                    if text.lower().startswith("format:"):
+                        format_instructions = text
+                        break
+            except Exception:
+                pass
+
+        return description, format_instructions
+    return "", None
 
 
 def _database_description(client: Client, database_id: str) -> str:
@@ -228,11 +336,13 @@ def fetch_categories(notion_token: str, notion_home_url: str) -> list[CategoryCo
         for block in response.get("results", []):
             block_type = block.get("type")
             if block_type == "child_page":
+                description, format_instructions = _description_and_format(client, block["id"])
                 categories.append(
                     CategoryConfig(
                         name=block["child_page"]["title"],
-                        description=_first_paragraph_text(client, block["id"]),
+                        description=description,
                         notion_page_id=block["id"],
+                        format_instructions=format_instructions,
                     )
                 )
             elif block_type == "child_database":

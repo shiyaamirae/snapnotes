@@ -18,6 +18,7 @@ class CategoryConfig(BaseModel):
     is_database: bool = False
     data_source_id: str | None = None
     schema_properties: list[DatabaseSchemaProperty] | None = None
+    format_instructions: str | None = None
 
 
 class AppConfig(BaseModel):
@@ -45,3 +46,13 @@ class DatabaseFieldValue(BaseModel):
 
 class DatabaseExtraction(BaseModel):
     fields: list[DatabaseFieldValue]
+
+
+class FormattedEntry(BaseModel):
+    toggle_title: str | None = None
+    content_type: Literal["bullets", "table", "code"]
+    bullets: list[str] | None = None
+    table_headers: list[str] | None = None
+    table_rows: list[list[str]] | None = None
+    code_content: str | None = None
+    code_language: str | None = None

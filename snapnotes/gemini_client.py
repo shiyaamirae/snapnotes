@@ -5,7 +5,13 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-from snapnotes.models import AppConfig, CategoryConfig, DatabaseExtraction, ExtractionResult
+from snapnotes.models import (
+    AppConfig,
+    CategoryConfig,
+    DatabaseExtraction,
+    ExtractionResult,
+    FormattedEntry,
+)
 
 
 def build_prompt(categories: list[CategoryConfig]) -> str:
@@ -91,3 +97,37 @@ def extract_database_fields(
     )
 
     return DatabaseExtraction.model_validate_json(response.text)
+
+
+def build_format_prompt(category: CategoryConfig) -> str:
+    return f"""This screenshot matched the "{category.name}" category: {category.description}
+
+Follow this exact formatting instruction for how to structure the entry:
+{category.format_instructions}
+
+Decide the right content_type (bullets, table, or code) based on what's
+being captured and the instruction above - e.g. "in a code block" means
+content_type "code" with the text in code_content; a comparison implies
+"table"; anything else is usually "bullets". If the instruction describes
+a toggle title, set toggle_title to that (kept short, per the instruction).
+"""
+
+
+def extract_formatted_entry(
+    image_path: Path, cfg: AppConfig, category: CategoryConfig
+) -> FormattedEntry:
+    client = genai.Client(api_key=cfg.gemini_api_key)
+    image_part = types.Part.from_bytes(
+        data=image_path.read_bytes(), mime_type="image/png"
+    )
+
+    response = client.models.generate_content(
+        model=cfg.gemini_model,
+        contents=[build_format_prompt(category), image_part],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=FormattedEntry,
+        ),
+    )
+
+    return FormattedEntry.model_validate_json(response.text)
