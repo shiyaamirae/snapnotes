@@ -1,5 +1,7 @@
 # SnapNotes setup
 
+**Requires:** macOS, [Homebrew](https://brew.sh), Python 3.12.
+
 ## 1. Get credentials ready
 
 - **Gemini API key** — create one at Google AI Studio (aistudio.google.com).
@@ -7,8 +9,8 @@
   Choose **"Access token"** as the auth method, not OAuth. Copy the
   "Internal Integration Secret."
 - **Notion home page** — create a page in Notion for SnapNotes (any name),
-  then share it with the integration you just made: "..." menu (top right)
-  → Connections → select your integration. Copy the page's URL.
+  then share it with the integration you just made: "..." menu (top right of the page created)
+  → Connections → select your integration from the previous step. Copy the page's URL.
 
 ## 2. Run the installer
 
@@ -19,8 +21,9 @@ python3.12 -m scripts.install
 ```
 
 This creates `.venv`, installs dependencies, prompts you for the two
-credentials and the home page URL above (writes `.env`/`config.yaml`),
-checks whether Hammerspoon and `terminal-notifier` are installed, and
+credentials and the home page URL above (writes `.env`/`config.yaml` —
+both are git-ignored, never commit them; this repo is public), checks
+whether Hammerspoon and `terminal-notifier` are installed, and
 registers SnapNotes as a login service via `launchd`. Safe to re-run —
 it skips any step whose file already exists.
 
