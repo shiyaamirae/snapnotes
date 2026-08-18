@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -182,14 +183,16 @@ def _upload_image(client: Client, image_path: Path) -> str:
     return upload["id"]
 
 
-def build_toggle_children(
+def build_formatted_children(
     entry: FormattedEntry,
     fallback_title: str,
     image_file_upload_id: str | None = None,
 ) -> list[dict]:
-    """A toggle-wrapped entry, per a category's own "Format:" instruction
-    (e.g. Prompts wants toggle+code block, Portfolio Ideas wants toggle+bullets).
-    No heading/timestamp - the toggle title itself is the visible label."""
+    """A per-category-instructed entry (Format:), either toggle-wrapped
+    (e.g. Prompts wants toggle+code block, Portfolio Ideas wants
+    toggle+bullets) or a plain heading (e.g. Case Study Tips wants a
+    heading, not a toggle) - entry.wrap_in_toggle decides which, per what
+    the category's own instruction actually asked for."""
     if entry.content_type == "code":
         inner = [_code_block(entry.code_content or "", entry.code_language)]
     elif entry.content_type == "table":
@@ -205,15 +208,25 @@ def build_toggle_children(
         }
         inner = [image_block, *inner]
 
-    toggle_block = {
+    title = entry.title or fallback_title
+
+    if entry.wrap_in_toggle:
+        toggle_block = {
+            "object": "block",
+            "type": "toggle",
+            "toggle": {
+                "rich_text": [{"type": "text", "text": {"content": title}}],
+                "children": inner,
+            },
+        }
+        return [toggle_block, {"object": "block", "type": "divider", "divider": {}}]
+
+    heading_block = {
         "object": "block",
-        "type": "toggle",
-        "toggle": {
-            "rich_text": [{"type": "text", "text": {"content": entry.toggle_title or fallback_title}}],
-            "children": inner,
-        },
+        "type": "heading_2",
+        "heading_2": {"rich_text": [{"type": "text", "text": {"content": title}}]},
     }
-    return [toggle_block, {"object": "block", "type": "divider", "divider": {}}]
+    return [heading_block, *inner]
 
 
 def _data_source_schema(client: Client, database_id: str) -> tuple[str, list[DatabaseSchemaProperty]]:
@@ -278,6 +291,27 @@ def _build_database_properties(
     return payload
 
 
+def _append_blocks_verified(client: Client, block_id: str, children: list[dict]) -> dict:
+    """client.blocks.children.append occasionally reports success (no
+    exception) while writing nothing - observed once against a Notion page
+    created only minutes earlier. Verify the response actually contains the
+    blocks we sent, retrying once after a short pause if not, and raising
+    if it still doesn't look right (so pipeline.py's error handling routes
+    it to errors/ instead of silently logging a false "Filed")."""
+    for attempt in (1, 2):
+        response = client.blocks.children.append(block_id=block_id, children=children)
+        results = response.get("results", [])
+        if len(results) >= len(children):
+            return response
+        logger.error(
+            "blocks.children.append returned %d results for %d children (attempt %d) on block %s",
+            len(results), len(children), attempt, block_id,
+        )
+        if attempt == 1:
+            time.sleep(2)
+    raise RuntimeError(f"Notion returned fewer blocks than sent when appending to {block_id}")
+
+
 def append_entry(
     notion_token: str,
     category: CategoryConfig,
@@ -302,7 +336,7 @@ def append_entry(
             parent={"data_source_id": category.data_source_id}, properties=properties
         )
         row_id = row["id"]
-        client.blocks.children.append(block_id=row_id, children=children)
+        _append_blocks_verified(client, row_id, children)
         return row_id
 
     if formatted_entry is not None:
@@ -315,7 +349,7 @@ def append_entry(
                     "Failed to upload screenshot for %s, saving entry without it", image_path.name,
                     exc_info=True,
                 )
-        children = build_toggle_children(
+        children = build_formatted_children(
             formatted_entry, fallback_title=result.title, image_file_upload_id=image_file_upload_id
         )
     elif result.content_type == "table":
@@ -325,7 +359,7 @@ def append_entry(
     else:
         children = build_bullets_children(result.title, result.bullets or [])
 
-    response = client.blocks.children.append(block_id=category.notion_page_id, children=children)
+    response = _append_blocks_verified(client, category.notion_page_id, children)
     return response.get("results", [{}])[0].get("id", "")
 
 

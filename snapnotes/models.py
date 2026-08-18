@@ -50,7 +50,8 @@ class DatabaseExtraction(BaseModel):
 
 
 class FormattedEntry(BaseModel):
-    toggle_title: str | None = None
+    title: str | None = None  # toggle summary or heading text, per wrap_in_toggle
+    wrap_in_toggle: bool = True
     content_type: Literal["bullets", "table", "code"]
     bullets: list[str] | None = None
     table_headers: list[str] | None = None

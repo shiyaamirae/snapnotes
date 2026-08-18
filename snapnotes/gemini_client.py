@@ -131,8 +131,13 @@ Follow this exact formatting instruction for how to structure the entry:
 Decide the right content_type (bullets, table, or code) based on what's
 being captured and the instruction above - e.g. "in a code block" means
 content_type "code" with the text in code_content; a comparison implies
-"table"; anything else is usually "bullets". If the instruction describes
-a toggle title, set toggle_title to that (kept short, per the instruction).
+"table"; anything else is usually "bullets".
+
+Set wrap_in_toggle to true only if the instruction actually describes a
+toggle (e.g. "toggle title = ..."). If it instead describes a heading
+(e.g. "each entry is a heading"), set wrap_in_toggle to false. Either
+way, set title to the toggle summary or heading text the instruction
+calls for, kept short.
 """
 
 

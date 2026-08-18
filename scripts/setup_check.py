@@ -47,6 +47,11 @@ def main() -> int:
                 all_ok = False
             else:
                 print(f"    fields: {', '.join(p.name for p in props)}")
+        else:
+            if cat.format_instructions:
+                print(f"    {cat.format_instructions}")
+            if cat.include_screenshot:
+                print("    Include screenshot: yes")
 
     return 0 if all_ok else 1
 
