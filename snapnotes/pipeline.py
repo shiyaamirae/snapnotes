@@ -40,7 +40,7 @@ def process_screenshot(
 
         if category:
             if category.is_database:
-                field_values = gemini_client.extract_database_fields(path, cfg, category)
+                field_values = gemini_client.extract_database_fields(path, cfg, category, result.title)
                 notion_client.append_entry(cfg.notion_token, category, result, field_values=field_values)
             elif category.format_instructions:
                 formatted_entry = gemini_client.extract_formatted_entry(path, cfg, category)

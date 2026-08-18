@@ -28,6 +28,11 @@ Look at this screenshot and:
 3. Format it as it should be appended to that note - use a
    table if it's comparative data, bullets otherwise
 4. Keep it skimmable, not a wall of text
+5. Give it a specific, descriptive title naming the actual content (e.g.
+   the model names, the tool, the topic) - not a generic title like
+   "X Overview" or one that just restates the category name. If the
+   screenshot covers several distinct items, name them (or the most
+   notable few) rather than defaulting to a vague summary label.
 
 If nothing fits, explain what the screenshot is, why it doesn't fit any
 category, and suggest the closest matching category.
@@ -54,7 +59,7 @@ def classify_and_extract(
     return ExtractionResult.model_validate_json(response.text)
 
 
-def build_database_prompt(category: CategoryConfig) -> str:
+def build_database_prompt(category: CategoryConfig, overview_title: str) -> str:
     field_lines = []
     for prop in category.schema_properties or []:
         if prop.type in ("select", "multi_select") and prop.options:
@@ -68,6 +73,8 @@ def build_database_prompt(category: CategoryConfig) -> str:
 
     return f"""This screenshot matched the "{category.name}" category: {category.description}
 
+The screenshot's overall subject, as already determined, is: "{overview_title}"
+
 Extract values for each of these Notion database fields, based only on what's
 visible in the screenshot:
 {fields_block}
@@ -76,11 +83,20 @@ For each field, return its exact name (as given above) and its value(s) as a
 list of strings - one string for single-value fields, multiple strings for
 multi_select fields. Skip a field entirely if nothing in the screenshot is
 relevant to it.
+
+If the screenshot covers ONE specific item, use its own name for a
+title-type field. If it covers MULTIPLE distinct items (a list, search
+results, a comparison of several things), do NOT default to just the
+first one - use a title that reflects the whole screenshot instead
+(something close to "{overview_title}" works well), and leave
+single-value fields like a select empty rather than picking one item to
+represent all of them, unless one item is clearly the primary subject
+and the rest are secondary context.
 """
 
 
 def extract_database_fields(
-    image_path: Path, cfg: AppConfig, category: CategoryConfig
+    image_path: Path, cfg: AppConfig, category: CategoryConfig, overview_title: str
 ) -> DatabaseExtraction:
     client = genai.Client(api_key=cfg.gemini_api_key)
     image_part = types.Part.from_bytes(
@@ -89,7 +105,7 @@ def extract_database_fields(
 
     response = client.models.generate_content(
         model=cfg.gemini_model,
-        contents=[build_database_prompt(category), image_part],
+        contents=[build_database_prompt(category, overview_title), image_part],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=DatabaseExtraction,
