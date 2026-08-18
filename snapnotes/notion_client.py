@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import io
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
 
 from notion_client import Client
+
+logger = logging.getLogger("snapnotes")
 
 from snapnotes.models import (
     CategoryConfig,
@@ -140,15 +144,41 @@ def _code_block(content: str, language: str | None) -> dict:
     }
 
 
+NOTION_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # Notion's single-part upload cap
+
+
+def _prepare_image_bytes(image_path: Path) -> tuple[bytes, str, str]:
+    """Returns (bytes, filename, content_type). A full-screen capture
+    routinely exceeds Notion's 5 MiB single-part upload cap, so compress to
+    JPEG (shrinking quality, then dimensions if needed) when that happens."""
+    data = image_path.read_bytes()
+    if len(data) <= NOTION_MAX_UPLOAD_BYTES:
+        return data, image_path.name, "image/png"
+
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    buf = io.BytesIO()
+    for quality in (85, 70, 55, 40):
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        if buf.tell() <= NOTION_MAX_UPLOAD_BYTES:
+            return buf.getvalue(), image_path.stem + ".jpg", "image/jpeg"
+
+    while img.width > 800 and buf.tell() > NOTION_MAX_UPLOAD_BYTES:
+        img = img.resize((img.width // 2, img.height // 2))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=60)
+
+    return buf.getvalue(), image_path.stem + ".jpg", "image/jpeg"
+
+
 def _upload_image(client: Client, image_path: Path) -> str:
     """Uploads a screenshot straight to Notion (not an external host) via the
     File Upload API, returning a file_upload id usable in an image block."""
-    upload = client.file_uploads.create(
-        mode="single_part", filename=image_path.name, content_type="image/png"
-    )
-    client.file_uploads.send(
-        upload["id"], file=(image_path.name, image_path.read_bytes(), "image/png")
-    )
+    data, filename, content_type = _prepare_image_bytes(image_path)
+    upload = client.file_uploads.create(mode="single_part", filename=filename, content_type=content_type)
+    client.file_uploads.send(upload["id"], file=(filename, data, content_type))
     return upload["id"]
 
 
@@ -278,7 +308,13 @@ def append_entry(
     if formatted_entry is not None:
         image_file_upload_id = None
         if category.include_screenshot and image_path is not None:
-            image_file_upload_id = _upload_image(client, image_path)
+            try:
+                image_file_upload_id = _upload_image(client, image_path)
+            except Exception:
+                logger.error(
+                    "Failed to upload screenshot for %s, saving entry without it", image_path.name,
+                    exc_info=True,
+                )
         children = build_toggle_children(
             formatted_entry, fallback_title=result.title, image_file_upload_id=image_file_upload_id
         )
