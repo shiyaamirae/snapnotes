@@ -35,18 +35,24 @@ _TERMINAL_NOTIFIER = shutil.which("terminal-notifier") or next(
 )
 
 
-def _notify(subtitle: str, message: str) -> None:
+def _notify(
+    subtitle: str, message: str, open_url: str | None = None, execute: str | None = None
+) -> None:
     """rumps.notification is unreliable on modern macOS for an unbundled
-    script - terminal-notifier is a signed helper that actually delivers."""
+    script - terminal-notifier is a signed helper that actually delivers.
+    open_url/execute make clicking the notification actually go somewhere
+    (a plain click otherwise tries to activate "Terminal", which does
+    nothing useful since this doesn't run in a visible Terminal window)."""
     if not _TERMINAL_NOTIFIER:
         logger.error("terminal-notifier not found, skipping notification")
         return
+    args = [_TERMINAL_NOTIFIER, "-title", "SnapNotes", "-subtitle", subtitle, "-message", message]
+    if open_url:
+        args += ["-open", open_url]
+    elif execute:
+        args += ["-execute", execute]
     try:
-        result = subprocess.run(
-            [_TERMINAL_NOTIFIER, "-title", "SnapNotes", "-subtitle", subtitle, "-message", message],
-            capture_output=True,
-            text=True,
-        )
+        result = subprocess.run(args, capture_output=True, text=True)
         logger.info(
             "terminal-notifier rc=%s stdout=%r stderr=%r", result.returncode, result.stdout, result.stderr
         )
@@ -91,13 +97,13 @@ class SnapNotesApp(rumps.App):
                 if status == "filed":
                     self.recent.appendleft(f"{filename} -> filed")
                     self._rebuild_recent_menu()
-                    _notify("Filed", filename)
+                    _notify("Filed", filename, open_url=self.cfg.notion_home_url)
                 elif status == "needs_review":
                     self.recent.appendleft(f"{filename} -> needs review")
                     self._rebuild_recent_menu()
-                    _notify("Needs review", filename)
+                    _notify("Needs review", filename, execute=f"open '{REPO_ROOT / 'needs_review'}'")
                 elif status == "error":
-                    _notify("Error processing", filename)
+                    _notify("Error processing", filename, execute=f"open '{REPO_ROOT / 'errors'}'")
         except queue.Empty:
             pass
 
