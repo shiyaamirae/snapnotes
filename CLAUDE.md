@@ -4,7 +4,7 @@ You're working inside the **WAT framework** (Workflows, Agents, Tools) for the *
 
 ## Project Context
 
-Shiyaa is learning agentic AI daily (YouTube tutorials, tips, model comparisons) via screenshots. Instead of manually renaming and sorting them, this pipeline automates it end to end:
+Screenshots pile up fast when learning from tutorials, tips, and comparisons. Instead of manually renaming and sorting them, this pipeline automates it end to end:
 
 `hotkey → screenshot saved → AI classifies + extracts → content appended to matching Notion page`
 
