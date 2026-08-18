@@ -89,11 +89,16 @@ relevant to it.
 If the screenshot covers ONE specific item, use its own name for a
 title-type field. If it covers MULTIPLE distinct items (a list, search
 results, a comparison of several things), do NOT default to just the
-first one - use a title that reflects the whole screenshot instead
-(something close to "{overview_title}" works well), and leave
-single-value fields like a select empty rather than picking one item to
-represent all of them, unless one item is clearly the primary subject
-and the rest are secondary context.
+first one:
+- Use a title that reflects the whole screenshot instead (something
+  close to "{overview_title}" works well)
+- For a single-value field (select), leave it empty rather than picking
+  one item to represent all of them, unless one item is clearly the
+  primary subject and the rest are secondary context
+- For a multi-value or free-text field (multi_select, rich_text), still
+  fill it in by aggregating across all the items - e.g. the union of
+  what each item is best for, or a summary note covering all of them.
+  Don't leave these empty just because several items are covered.
 """
 
 
