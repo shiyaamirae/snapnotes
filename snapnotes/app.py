@@ -107,7 +107,12 @@ class SnapNotesApp(rumps.App):
         self.executor = ThreadPoolExecutor(max_workers=2)
         self._result_shown_at: float | None = None
 
-        self.recent_menu = rumps.MenuItem("Recent Captures")
+        # rumps.MenuItem has no explicit enabling logic - macOS auto-disables
+        # (greys out) any item with no callback, including a submenu-holder
+        # like this one with no action of its own. A no-op callback is
+        # enough to make macOS treat it as enabled/expandable; clicking a
+        # submenu-parent expands the submenu instead of firing its action.
+        self.recent_menu = rumps.MenuItem("Recent Captures", callback=lambda _sender: None)
         self.usage_item = rumps.MenuItem(f"Gemini calls today: {api_usage.today_count()}")
         self.menu = [
             self.recent_menu,
