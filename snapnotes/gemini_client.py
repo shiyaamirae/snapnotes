@@ -28,11 +28,13 @@ Look at this screenshot and:
 3. Format it as it should be appended to that note - use a
    table if it's comparative data, bullets otherwise
 4. Keep it skimmable, not a wall of text
-5. Give it a specific, descriptive title naming the actual content (e.g.
-   the model names, the tool, the topic) - not a generic title like
-   "X Overview" or one that just restates the category name. If the
-   screenshot covers several distinct items, name them (or the most
-   notable few) rather than defaulting to a vague summary label.
+5. Give it a specific, recognizable title you'd understand at a glance
+   weeks later without opening it: a short label for what kind of content
+   this is, followed by the specific named items in parentheses - e.g.
+   "Ollama AI Models (Granite, Mistral, Kimi)", not a generic label alone
+   ("AI Models Overview") and not a bare comma-separated list with no
+   framing ("granite, mistral, kimi"). Name the most notable few items if
+   there are many rather than every single one.
 
 If nothing fits, explain what the screenshot is, why it doesn't fit any
 category, and suggest the closest matching category.
