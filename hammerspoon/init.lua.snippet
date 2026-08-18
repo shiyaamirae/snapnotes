@@ -6,7 +6,17 @@
 
 local inboxDir = os.getenv("HOME") .. "/snapnotes/inbox/"
 
+local function ensureSnapNotesRunning()
+    -- launchctl kickstart (no -k) is a no-op if already running, starts it
+    -- fresh if not - safe to call on every capture, self-heals after a
+    -- manual Quit from the menu bar without disrupting an active run.
+    -- Resolves the user via `whoami` inside the shell itself rather than
+    -- Lua's os.getenv("USER"), which isn't reliably set for GUI apps.
+    hs.execute("launchctl kickstart gui/$(id -u)/com.$(whoami).snapnotes")
+end
+
 local function captureTo(flags)
+    ensureSnapNotesRunning()
     local filename = inboxDir .. "snap_" .. os.date("%Y%m%d_%H%M%S") .. "_" .. tostring(math.random(1000, 9999)) .. ".png"
     local args = {}
     for _, f in ipairs(flags) do table.insert(args, f) end
