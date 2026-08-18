@@ -1,15 +1,28 @@
 -- SNAPNOTES BEGIN
 -- Merge this into ~/.hammerspoon/init.lua (create the file if it doesn't exist yet).
--- Hotkey: cmd+shift+7 (doesn't collide with system shortcuts like cmd+shift+3/4/5).
+-- Hotkeys (neither collides with system shortcuts like cmd+shift+3/4/5):
+--   cmd+shift+7 -> full-screen capture
+--   cmd+shift+8 -> crop/interactive capture (click-drag to select an area)
 
 local inboxDir = os.getenv("HOME") .. "/snapnotes/inbox/"
 
-hs.hotkey.bind({"cmd", "shift"}, "7", function()
+local function captureTo(flags)
     local filename = inboxDir .. "snap_" .. os.date("%Y%m%d_%H%M%S") .. "_" .. tostring(math.random(1000, 9999)) .. ".png"
+    local args = {}
+    for _, f in ipairs(flags) do table.insert(args, f) end
+    table.insert(args, filename)
     hs.task.new("/usr/sbin/screencapture", function(exitCode)
         if exitCode == 0 then
             hs.alert.show("SnapNotes: captured")
         end
-    end, {"-i", filename}):start()
+    end, args):start()
+end
+
+hs.hotkey.bind({"cmd", "shift"}, "7", function()
+    captureTo({})
+end)
+
+hs.hotkey.bind({"cmd", "shift"}, "8", function()
+    captureTo({"-i"})
 end)
 -- SNAPNOTES END
