@@ -1,0 +1,17 @@
+.venv/
+.env
+config.yaml
+__pycache__/
+*.pyc
+.DS_Store
+
+inbox/*
+!inbox/.gitkeep
+needs_review/*
+!needs_review/.gitkeep
+processed/*
+!processed/.gitkeep
+errors/*
+!errors/.gitkeep
+logs/*
+!logs/.gitkeep

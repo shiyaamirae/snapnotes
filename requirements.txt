@@ -1,0 +1,8 @@
+rumps
+watchdog
+google-genai
+notion-client
+pydantic
+python-dotenv
+PyYAML
+pytest

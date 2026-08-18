@@ -1,0 +1,17 @@
+# Copy this to config.yaml and fill in real values.
+# Page ID comes from the end of a Notion page's URL, e.g.
+# notion.so/My-Page-<PAGE_ID> -> just the <PAGE_ID> part (with or without dashes, both work).
+
+notion_home_url: "TODO_PASTE_MAIN_PAGE_URL"
+
+# Categories are NOT listed here. SnapNotes reads them live from Notion at
+# runtime: every subpage directly under notion_home_url becomes a category,
+# named after the subpage title. Add a category by adding a subpage in
+# Notion - no code or config change needed.
+#
+# Optional: give a subpage a first paragraph of body text (e.g. "which AI
+# models are free and what they're good for") and SnapNotes will use it as
+# the category description in the classification prompt.
+
+gemini:
+  model: "gemini-flash-lite-latest"
