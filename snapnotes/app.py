@@ -13,7 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import rumps
-from AppKit import NSApplication
+from AppKit import (
+    NSAlert,
+    NSAlertFirstButtonReturn,
+    NSApplication,
+    NSWindowCollectionBehaviorMoveToActiveSpace,
+)
 
 from snapnotes import api_usage, notion_client
 from snapnotes.config import REPO_ROOT, load_config
@@ -91,6 +96,23 @@ def _notify(
         )
     except Exception:
         logger.error("terminal-notifier call failed:\n%s", traceback.format_exc())
+
+
+def _show_alert(title: str, message: str, buttons: tuple[str, ...] = ("OK",)) -> int:
+    """rumps.alert()'s window is pinned to whatever macOS Space it first
+    opens in, so it doesn't follow the user to their current Space - it's
+    still real and blocking, just invisible unless you happen to switch
+    back to that Space. Building the NSAlert directly lets us mark the
+    window to always join/move to the active Space instead. Returns
+    NSAlertFirstButtonReturn (1000) if the first button was clicked."""
+    NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+    alert = NSAlert.alloc().init()
+    alert.setMessageText_(title)
+    alert.setInformativeText_(message)
+    for button_title in buttons:
+        alert.addButtonWithTitle_(button_title)
+    alert.window().setCollectionBehavior_(NSWindowCollectionBehaviorMoveToActiveSpace)
+    return alert.runModal()
 
 
 @dataclass
@@ -195,19 +217,13 @@ class SnapNotesApp(rumps.App):
     def _make_undo_callback(self, entry: RecentEntry):
         def _undo(_sender):
             outcome = entry.outcome
-            # A menu-bar-only ("accessory") app isn't the frontmost app by
-            # default, and NSAlert's modal loop can resolve itself near-
-            # instantly (as a false "cancel") if the app - and therefore the
-            # alert - never actually gets key focus. Force activation first.
-            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
-            confirmed = rumps.alert(
-                title="Undo filing?",
-                message=f'Remove "{entry.filename}" from {outcome.filed_category} in Notion '
+            confirmed = _show_alert(
+                "Undo filing?",
+                f'Remove "{entry.filename}" from {outcome.filed_category} in Notion '
                 f"and move the screenshot back to needs_review?",
-                ok="Undo",
-                cancel="Cancel",
+                buttons=("Undo", "Cancel"),
             )
-            if confirmed != 1:
+            if confirmed != NSAlertFirstButtonReturn:
                 return
             try:
                 if outcome.notion_entry_id:
@@ -223,9 +239,9 @@ class SnapNotesApp(rumps.App):
                 _notify("Undone", f"{entry.filename} moved back to needs_review")
             except Exception:
                 logger.error("Undo failed for %s:\n%s", entry.filename, traceback.format_exc())
-                rumps.alert(
-                    title="Undo failed",
-                    message="Check logs/snapnotes.log - the Notion entry or file move may be incomplete.",
+                _show_alert(
+                    "Undo failed",
+                    "Check logs/snapnotes.log - the Notion entry or file move may be incomplete.",
                 )
 
         return _undo
