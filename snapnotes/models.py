@@ -19,6 +19,7 @@ class CategoryConfig(BaseModel):
     data_source_id: str | None = None
     schema_properties: list[DatabaseSchemaProperty] | None = None
     format_instructions: str | None = None
+    include_screenshot: bool = False
 
 
 class AppConfig(BaseModel):

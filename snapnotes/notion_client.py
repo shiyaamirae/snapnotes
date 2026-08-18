@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from pathlib import Path
 
 from notion_client import Client
 
@@ -139,7 +140,23 @@ def _code_block(content: str, language: str | None) -> dict:
     }
 
 
-def build_toggle_children(entry: FormattedEntry, fallback_title: str) -> list[dict]:
+def _upload_image(client: Client, image_path: Path) -> str:
+    """Uploads a screenshot straight to Notion (not an external host) via the
+    File Upload API, returning a file_upload id usable in an image block."""
+    upload = client.file_uploads.create(
+        mode="single_part", filename=image_path.name, content_type="image/png"
+    )
+    client.file_uploads.send(
+        upload["id"], file=(image_path.name, image_path.read_bytes(), "image/png")
+    )
+    return upload["id"]
+
+
+def build_toggle_children(
+    entry: FormattedEntry,
+    fallback_title: str,
+    image_file_upload_id: str | None = None,
+) -> list[dict]:
     """A toggle-wrapped entry, per a category's own "Format:" instruction
     (e.g. Prompts wants toggle+code block, Portfolio Ideas wants toggle+bullets).
     No heading/timestamp - the toggle title itself is the visible label."""
@@ -149,6 +166,14 @@ def build_toggle_children(entry: FormattedEntry, fallback_title: str) -> list[di
         inner = [_plain_table_block(entry.table_headers or [], entry.table_rows or [])]
     else:
         inner = _bullet_item_blocks(entry.bullets or [])
+
+    if image_file_upload_id:
+        image_block = {
+            "object": "block",
+            "type": "image",
+            "image": {"type": "file_upload", "file_upload": {"id": image_file_upload_id}},
+        }
+        inner = [image_block, *inner]
 
     toggle_block = {
         "object": "block",
@@ -229,6 +254,7 @@ def append_entry(
     result: ExtractionResult,
     field_values: DatabaseExtraction | None = None,
     formatted_entry: FormattedEntry | None = None,
+    image_path: Path | None = None,
 ) -> str:
     client = Client(auth=notion_token)
 
@@ -250,7 +276,12 @@ def append_entry(
         return row_id
 
     if formatted_entry is not None:
-        children = build_toggle_children(formatted_entry, fallback_title=result.title)
+        image_file_upload_id = None
+        if category.include_screenshot and image_path is not None:
+            image_file_upload_id = _upload_image(client, image_path)
+        children = build_toggle_children(
+            formatted_entry, fallback_title=result.title, image_file_upload_id=image_file_upload_id
+        )
     elif result.content_type == "table":
         children = build_table_children(
             result.title, result.table_headers or [], result.table_rows or []
@@ -277,17 +308,17 @@ def _block_text(block: dict) -> str:
     return "".join(t.get("plain_text", "") for t in rich_text).strip()
 
 
-def _description_and_format(client: Client, page_id: str) -> tuple[str, str | None]:
-    """Best-effort description + format instruction: the plain text of a
-    category subpage's first paragraph or callout block (e.g. a "What this
-    page is for:" note), plus a nested "Format:" child block under it, if
-    either exists. Format instructions are kept separate from the
-    description since they're only used once a category has already
+def _description_and_format(client: Client, page_id: str) -> tuple[str, str | None, bool]:
+    """Best-effort description + per-category instructions: the plain text of
+    a category subpage's first paragraph or callout block (e.g. a "What this
+    page is for:" note), plus any nested child blocks under it - a "Format:"
+    instruction, and an "Include screenshot: yes" toggle. These live separate
+    from the description since they're only used once a category has already
     matched, not during classification."""
     try:
         children = client.blocks.children.list(block_id=page_id, page_size=5)
     except Exception:
-        return "", None
+        return "", None, False
 
     for block in children.get("results", []):
         block_type = block.get("type")
@@ -298,19 +329,22 @@ def _description_and_format(client: Client, page_id: str) -> tuple[str, str | No
             continue
 
         format_instructions = None
+        include_screenshot = False
         if block.get("has_children"):
             try:
                 sub_blocks = client.blocks.children.list(block_id=block["id"], page_size=5)
                 for sub_block in sub_blocks.get("results", []):
                     text = _block_text(sub_block)
-                    if text.lower().startswith("format:"):
+                    lowered = text.lower()
+                    if lowered.startswith("format:"):
                         format_instructions = text
-                        break
+                    elif lowered.startswith("include screenshot"):
+                        include_screenshot = "yes" in lowered or "true" in lowered
             except Exception:
                 pass
 
-        return description, format_instructions
-    return "", None
+        return description, format_instructions, include_screenshot
+    return "", None, False
 
 
 def _database_description(client: Client, database_id: str) -> str:
@@ -336,13 +370,16 @@ def fetch_categories(notion_token: str, notion_home_url: str) -> list[CategoryCo
         for block in response.get("results", []):
             block_type = block.get("type")
             if block_type == "child_page":
-                description, format_instructions = _description_and_format(client, block["id"])
+                description, format_instructions, include_screenshot = _description_and_format(
+                    client, block["id"]
+                )
                 categories.append(
                     CategoryConfig(
                         name=block["child_page"]["title"],
                         description=description,
                         notion_page_id=block["id"],
                         format_instructions=format_instructions,
+                        include_screenshot=include_screenshot,
                     )
                 )
             elif block_type == "child_database":
