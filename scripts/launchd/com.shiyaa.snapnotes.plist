@@ -3,22 +3,22 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.shiyaa.snapnotes</string>
+    <string>__LABEL__</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/shiyaa/snapnotes/.venv/bin/python</string>
+        <string>__VENV_PYTHON__</string>
         <string>-m</string>
         <string>snapnotes.app</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/shiyaa/snapnotes</string>
+    <string>__REPO_ROOT__</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <false/>
     <key>StandardOutPath</key>
-    <string>/Users/shiyaa/snapnotes/logs/launchd.out.log</string>
+    <string>__REPO_ROOT__/logs/launchd.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/shiyaa/snapnotes/logs/launchd.err.log</string>
+    <string>__REPO_ROOT__/logs/launchd.err.log</string>
 </dict>
 </plist>

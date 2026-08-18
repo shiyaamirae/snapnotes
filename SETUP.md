@@ -1,5 +1,21 @@
 # SnapNotes setup
 
+## Quickstart (one command)
+
+From the repo root, with the credentials below on hand:
+
+```
+python3.12 -m scripts.install
+```
+
+This creates `.venv`, installs dependencies, prompts for your Gemini/Notion
+credentials, checks for Hammerspoon and `terminal-notifier`, and registers
+SnapNotes as a login service via `launchd`. It won't touch Hammerspoon's
+hotkey config or macOS permissions - those still need the manual steps
+below. Once it's done, run `.venv/bin/python -m scripts.bootstrap_categories`
+for a starter set of Notion categories (optional - you can also just add
+subpages yourself).
+
 ## Things only you can do (Claude Code can't click through GUIs)
 
 1. Install Hammerspoon: `brew install --cask hammerspoon`, launch it once,
