@@ -35,11 +35,20 @@ def main() -> int:
         return 1
 
     print(f"OK: found {len(categories)} categories live from Notion:")
+    all_ok = True
     for cat in categories:
         desc = f" - {cat.description}" if cat.description else ""
-        print(f"  - {cat.name}{desc}")
+        kind = "database" if cat.is_database else "page"
+        print(f"  - {cat.name} [{kind}]{desc}")
+        if cat.is_database:
+            props = cat.schema_properties or []
+            if not any(p.type == "title" for p in props):
+                print("    FAIL: no writable title property found on this database")
+                all_ok = False
+            else:
+                print(f"    fields: {', '.join(p.name for p in props)}")
 
-    return 0
+    return 0 if all_ok else 1
 
 
 if __name__ == "__main__":

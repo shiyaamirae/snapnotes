@@ -5,9 +5,9 @@
 1. Install Hammerspoon: `brew install --cask hammerspoon`, launch it once,
    grant it **Accessibility** and **Screen Recording** permission in
    System Settings -> Privacy & Security.
-2. Pick a hotkey that doesn't collide with system shortcuts (avoid
-   cmd+shift+3/4/5). Default in `hammerspoon/init.lua.snippet` is
-   cmd+alt+ctrl+S — change it there if you want something else.
+2. Hotkey is set to cmd+shift+7 in `hammerspoon/init.lua.snippet` (doesn't
+   collide with system shortcuts like cmd+shift+3/4/5). Change it there if
+   you want something else.
 3. Create a Gemini API key at Google AI Studio -> put it in `.env` as
    `GEMINI_API_KEY`.
 4. Create a Notion integration at notion.so/my-integrations (internal

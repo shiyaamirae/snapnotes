@@ -5,10 +5,19 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class DatabaseSchemaProperty(BaseModel):
+    name: str
+    type: str
+    options: list[str] = []
+
+
 class CategoryConfig(BaseModel):
     name: str
     description: str
     notion_page_id: str
+    is_database: bool = False
+    data_source_id: str | None = None
+    schema_properties: list[DatabaseSchemaProperty] | None = None
 
 
 class AppConfig(BaseModel):
@@ -27,3 +36,12 @@ class ExtractionResult(BaseModel):
     bullets: list[str] | None = None
     explanation: str
     suggested_category: str | None = None
+
+
+class DatabaseFieldValue(BaseModel):
+    property: str
+    values: list[str]
+
+
+class DatabaseExtraction(BaseModel):
+    fields: list[DatabaseFieldValue]

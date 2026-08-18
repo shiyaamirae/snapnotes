@@ -10,7 +10,7 @@ from typing import Callable
 from snapnotes import gemini_client, notion_client
 from snapnotes.config import REPO_ROOT, load_config
 from snapnotes.logging_setup import setup_logging
-from snapnotes.models import AppConfig
+from snapnotes.models import AppConfig, CategoryConfig
 
 logger = setup_logging(interactive=True)
 
@@ -21,10 +21,10 @@ class ProcessResult(str, Enum):
     ERROR = "error"
 
 
-def _page_id_for(categories: list, category_name: str) -> str | None:
+def _category_for(categories: list[CategoryConfig], category_name: str) -> CategoryConfig | None:
     for cat in categories:
         if cat.name == category_name:
-            return cat.notion_page_id
+            return cat
     return None
 
 
@@ -36,10 +36,14 @@ def process_screenshot(
         categories = notion_client.fetch_categories(cfg.notion_token, cfg.notion_home_url)
         result = gemini_client.classify_and_extract(path, cfg, categories)
 
-        page_id = _page_id_for(categories, result.matched_category) if result.matched_category else None
+        category = _category_for(categories, result.matched_category) if result.matched_category else None
 
-        if page_id:
-            notion_client.append_entry(cfg.notion_token, page_id, result)
+        if category:
+            if category.is_database:
+                field_values = gemini_client.extract_database_fields(path, cfg, category)
+                notion_client.append_entry(cfg.notion_token, category, result, field_values=field_values)
+            else:
+                notion_client.append_entry(cfg.notion_token, category, result)
             dest_dir = REPO_ROOT / "processed" / result.matched_category
             dest_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(str(path), str(dest_dir / path.name))

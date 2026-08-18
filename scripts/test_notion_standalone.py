@@ -29,7 +29,7 @@ def main() -> int:
         bullets=["This is a test entry from test_notion_standalone.py", "Safe to delete"],
         explanation="test",
     )
-    append_entry(cfg.notion_token, match.notion_page_id, fake)
+    append_entry(cfg.notion_token, match, fake)
     print(f"Appended test entry to '{category_name}'. Check Notion.")
     return 0
 
