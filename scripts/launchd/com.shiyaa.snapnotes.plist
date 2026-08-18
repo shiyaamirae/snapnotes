@@ -6,19 +6,19 @@
     <string>com.shiyaa.snapnotes</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__VENV_PYTHON__</string>
+        <string>/Users/shiyaa/snapnotes/.venv/bin/python</string>
         <string>-m</string>
         <string>snapnotes.app</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>__REPO_ROOT__</string>
+    <string>/Users/shiyaa/snapnotes</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <false/>
     <key>StandardOutPath</key>
-    <string>__REPO_ROOT__/logs/launchd.out.log</string>
+    <string>/Users/shiyaa/snapnotes/logs/launchd.out.log</string>
     <key>StandardErrorPath</key>
-    <string>__REPO_ROOT__/logs/launchd.err.log</string>
+    <string>/Users/shiyaa/snapnotes/logs/launchd.err.log</string>
 </dict>
 </plist>

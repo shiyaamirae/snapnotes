@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import queue
+import shutil
 import subprocess
 import traceback
 import webbrowser
@@ -25,13 +26,24 @@ ICONS = {
     "error": "!",
 }
 
+# launchd runs with a minimal PATH (no /opt/homebrew/bin), so PATH lookup
+# alone isn't reliable - resolve once at import time, checking common
+# Homebrew locations as a fallback for when $PATH doesn't include it.
+_TERMINAL_NOTIFIER = shutil.which("terminal-notifier") or next(
+    (p for p in ("/opt/homebrew/bin/terminal-notifier", "/usr/local/bin/terminal-notifier") if Path(p).exists()),
+    None,
+)
+
 
 def _notify(subtitle: str, message: str) -> None:
     """rumps.notification is unreliable on modern macOS for an unbundled
     script - terminal-notifier is a signed helper that actually delivers."""
+    if not _TERMINAL_NOTIFIER:
+        logger.error("terminal-notifier not found, skipping notification")
+        return
     try:
         result = subprocess.run(
-            ["terminal-notifier", "-title", "SnapNotes", "-subtitle", subtitle, "-message", message],
+            [_TERMINAL_NOTIFIER, "-title", "SnapNotes", "-subtitle", subtitle, "-message", message],
             capture_output=True,
             text=True,
         )
