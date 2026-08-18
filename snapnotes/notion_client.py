@@ -188,15 +188,17 @@ def verify_page_access(notion_token: str, page_id: str) -> bool:
 
 def _first_paragraph_text(client: Client, page_id: str) -> str:
     """Best-effort description: the plain text of a category subpage's first
-    paragraph block, if it has one. Empty string if there isn't one."""
+    paragraph or callout block (e.g. a "What this page is for:" note), if it
+    has one. Empty string if there isn't one."""
     try:
         children = client.blocks.children.list(block_id=page_id, page_size=5)
     except Exception:
         return ""
 
     for block in children.get("results", []):
-        if block.get("type") == "paragraph":
-            rich_text = block["paragraph"].get("rich_text", [])
+        block_type = block.get("type")
+        if block_type in ("paragraph", "callout"):
+            rich_text = block[block_type].get("rich_text", [])
             text = "".join(t.get("plain_text", "") for t in rich_text).strip()
             if text:
                 return text
