@@ -170,14 +170,21 @@ class SnapNotesApp(rumps.App):
             self.recent_menu.clear()
         except AttributeError:
             pass
-        for entry in self.recent:
-            if entry.outcome.result == ProcessResult.FILED:
-                label = f"{entry.filename} -> {entry.outcome.filed_category} (click to undo)"
-                item = rumps.MenuItem(label, callback=self._make_undo_callback(entry))
-            else:
-                label = f"{entry.filename} -> needs review"
-                item = rumps.MenuItem(label)
-            self.recent_menu.add(item)
+        # rumps.Menu keys items by their title string and silently drops an
+        # .add() whose title already exists in the menu - a numbered prefix
+        # guarantees uniqueness even if two recent entries would otherwise
+        # render identical text (e.g. the same file reprocessed).
+        for i, entry in enumerate(self.recent, start=1):
+            try:
+                if entry.outcome.result == ProcessResult.FILED:
+                    label = f"{i}. {entry.filename} -> {entry.outcome.filed_category} (click to undo)"
+                    item = rumps.MenuItem(label, callback=self._make_undo_callback(entry))
+                else:
+                    label = f"{i}. {entry.filename} -> needs review"
+                    item = rumps.MenuItem(label)
+                self.recent_menu.add(item)
+            except Exception:
+                logger.error("Failed to add recent-menu item for %s:\n%s", entry.filename, traceback.format_exc())
 
     def _make_undo_callback(self, entry: RecentEntry):
         def _undo(_sender):
