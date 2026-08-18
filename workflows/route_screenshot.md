@@ -116,12 +116,13 @@ specifically") changes classification behavior immediately, no code change.
 
 ## 5. Failure handling
 
-- **Gemini 429 (rate limited)**: not yet distinguished from other errors —
-  currently falls into the generic `errors/` path. When this is hit for
-  real: check the response for whether it's a per-minute or per-day limit.
-  If per-minute, add exponential backoff with jitter and retry. If per-day,
-  stop processing and surface it — don't silently retry all day on a free
-  tier.
+- **Gemini transient errors (429 per-minute, 5xx server errors)**:
+  `gemini_client.py::_generate_with_retry` retries with exponential
+  backoff + jitter, up to 3 retries, before giving up and letting it fall
+  into `errors/`. A 429 that's specifically a per-day quota error (checked
+  via the error message text) raises immediately instead of retrying —
+  waiting a few seconds won't fix that, so there's no point burning
+  retries or your remaining quota on it.
 - **Notion API error** (bad page ID, integration not shared with the page,
   rate limit): falls into `errors/`. `scripts/setup_check.py` catches the
   common misconfigurations (missing token, home page not shared, no
@@ -146,7 +147,7 @@ specifically") changes classification behavior immediately, no code change.
 
 ## Known gaps (not yet built)
 
-- No retry/backoff on Gemini rate limits yet (see above).
-- No review/confirmation notification before a Notion write commits — this
-  is a deliberate Phase 2 deferral, not an oversight. Don't add it without
-  checking first.
+- No true review/confirmation gate before a Notion write commits (the
+  lighter version - a "Added to X ✅" notification plus an Undo action in
+  the menu bar's Recent Captures list - is built; a full pre-write
+  approval gate was deliberately scoped out to keep the pipeline hands-off).

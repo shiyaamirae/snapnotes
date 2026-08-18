@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+import random
+import time
 from pathlib import Path
+from typing import Any
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from snapnotes import api_usage
@@ -13,6 +18,44 @@ from snapnotes.models import (
     ExtractionResult,
     FormattedEntry,
 )
+
+logger = logging.getLogger("snapnotes")
+
+RETRYABLE_CODES = {429, 500, 502, 503, 504}
+MAX_RETRIES = 3
+BASE_DELAY_SECONDS = 2.0
+
+
+def _is_daily_quota_error(error: genai_errors.APIError) -> bool:
+    text = f"{error.message or ''} {error.details or ''}".lower()
+    return "per day" in text or "perday" in text or "daily" in text
+
+
+def _generate_with_retry(client: genai.Client, **kwargs: Any) -> types.GenerateContentResponse:
+    """Gemini's free tier hits real transient 5xx/429s in practice, not just
+    theoretically - retries with exponential backoff + jitter for anything
+    that looks temporary. A 429 that's specifically a per-day quota error
+    won't resolve by waiting a few seconds, so that one raises immediately
+    instead of burning retries."""
+    last_error: genai_errors.APIError | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            api_usage.record_call()
+            return client.models.generate_content(**kwargs)
+        except genai_errors.APIError as e:
+            last_error = e
+            if e.code == 429 and _is_daily_quota_error(e):
+                logger.error("Gemini daily quota exceeded, not retrying: %s", e)
+                raise
+            if e.code not in RETRYABLE_CODES or attempt == MAX_RETRIES:
+                raise
+            delay = BASE_DELAY_SECONDS * (2**attempt) + random.uniform(0, 1)
+            logger.error(
+                "Gemini API error %s (attempt %d/%d), retrying in %.1fs: %s",
+                e.code, attempt + 1, MAX_RETRIES, delay, e,
+            )
+            time.sleep(delay)
+    raise last_error  # unreachable, but satisfies type checkers
 
 
 def build_prompt(categories: list[CategoryConfig]) -> str:
@@ -50,8 +93,8 @@ def classify_and_extract(
         data=image_path.read_bytes(), mime_type="image/png"
     )
 
-    api_usage.record_call()
-    response = client.models.generate_content(
+    response = _generate_with_retry(
+        client,
         model=cfg.gemini_model,
         contents=[build_prompt(categories), image_part],
         config=types.GenerateContentConfig(
@@ -112,8 +155,8 @@ def extract_database_fields(
         data=image_path.read_bytes(), mime_type="image/png"
     )
 
-    api_usage.record_call()
-    response = client.models.generate_content(
+    response = _generate_with_retry(
+        client,
         model=cfg.gemini_model,
         contents=[build_database_prompt(category, overview_title), image_part],
         config=types.GenerateContentConfig(
@@ -152,8 +195,8 @@ def extract_formatted_entry(
         data=image_path.read_bytes(), mime_type="image/png"
     )
 
-    api_usage.record_call()
-    response = client.models.generate_content(
+    response = _generate_with_retry(
+        client,
         model=cfg.gemini_model,
         contents=[build_format_prompt(category), image_part],
         config=types.GenerateContentConfig(
